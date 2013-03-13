@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <title>Ananas-reporter by cedricbou</title>
+  </head>
+
+  <body>
+    <header>
+      <div class="inner">
+        <h1>Ananas-reporter</h1>
+        <h2>Build CSV from SQL query and send an email.</h2>
+        <a href="https://github.com/cedricbou/ananas-reporter" class="button"><small>View project on</small>GitHub</a>
+      </div>
+    </header>
+
+    <div id="content-wrapper">
+      <div class="inner clearfix">
+        <section id="main-content">
+          <p>Ananas reporting is short java program to send directly through email the result of a SQL query at programmed time (cron like). It is based on a configuration file.</p>
+
+<h2>How To Get Started</h2>
+
+<ul>
+<li>You need a JDK6 and an installation of maven 3 to build the source.</li>
+<li>Download the sources from <a href="https://github.com/cedricbou/ananas-reporter/archive/master.zip">Ananas Reporter Github</a>.</li>
+<li>run maven build with <code>mvn package</code> from the source directory.</li>
+<li>From the <code>target</code> directory, copy <code>ananas-reporter-all.jar</code> to a directory of your choice.</li>
+<li>Copy the sample <a href="https://github.com/cedricbou/ananas-reporter/blob/master/src/main/config/application.conf">application.conf</a> in the same directoy as the jar.</li>
+<li>Configure your databases, smtp and reports in the <code>application.conf</code> file to suit your needs.</li>
+<li>From the directory containing the jar, run <code>java -Dconfig.file=application.conf -jar ananas-reporter-all.jar</code>
+</li>
+</ul><h2>Configuring reports</h2>
+
+<p>All configuration is done with an external configuration file. The configuration file is loaded by using the system property <code>config.file</code>.</p>
+
+<p>For example : </p>
+
+<pre><code>$ java -Dconfig.file=application.conf -jar ananas-reporter-all.jar
+</code></pre>
+
+<p>Ananas Reporter uses the <a href="https://github.com/typesafehub/config">TypeSafe Config</a> library to load configuration file. It allows different configuration file loading methods. For example configuration can be loaded by url with the system property <code>config.url</code>. It also proposes an easy to use syntax. The config project has a its own documentation well written and explained, you should refer to it for further details on the configuration syntax and loading possibilities.</p>
+
+<h3>Configuring datasources</h3>
+
+<p>Because a report is the result of a query execution, we need to configure the databases used by the configured queries.</p>
+
+<p>Ananas Reporter is using Spring <a href="http://static.springsource.org/spring/docs/3.2.x/javadoc-api/org/springframework/jdbc/datasource/DriverManagerDataSource.html">DriverManagerDataSource</a> to connect to a database if no jdbc Driver class is specified. Otherwise, it uses the Spring <a href="http://static.springsource.org/spring/docs/3.2.x/javadoc-api/org/springframework/jdbc/datasource/SimpleDriverDataSource.html">SimpleDriverDataSource</a> when a jdbc driver class is specified.</p>
+
+<p>The connection is established before running a report, and closed after the query has finished.</p>
+
+<p>To configure a datasource, create a named datasource object inside the <code>datasources</code> configuration element :</p>
+
+<pre><code>datasources {
+    // This will create a connection to mysql on localhost and login with root user and empty password.
+    // The url must be a standard JDBC url.
+    //
+    // Because a driver is specified, it will use 
+    // the Spring DriverManagerDataSource internally.
+    asampledb: {
+        url: "jdbc:mysql://localhost/base1"
+        driver: "com.mysql.jdbc.Driver"
+        user: "root"
+        password: ""
+    }
+
+    // This will create a connection to mysql on localhost and login with root user and empty password.
+    // Because no driver is specified, it will use 
+    // the Spring SimpleDriverDataSource internally.
+    anothersample: {
+        url: "jdbc:mysql://localhost/base2?user=root&amp;password="
+    }
+}
+</code></pre>
+
+<h3>Configuring emailer</h3>
+
+<p>The <code>emailer</code> object has been created for smtp configuration. For now it supports only one configuration possibility, the <code>smtp</code> server :</p>
+
+<pre><code>emailer {
+   smtp: "smtp.example.com"
+}
+</code></pre>
+
+<p>There is place for improvement here with support for smtp with authentification and TLS.</p>
+
+<h3>Configuring reports</h3>
+
+<p>The <code>reports</code> object contains the report you will configure. A report is referring to a declared datasource, it defines one SQL query and necessary information to send emails (from/to/subject).</p>
+
+<pre><code>reports {
+    // You can defined any name for your report as long 
+    // as it respects naming convention from TypeSafe config.
+    myFirstReport {
+        // The datasource name, as declared in the `datasources` configuration object.
+        ds: "base1" 
+
+        // The SQL query that will be executed, results are transformed into a CSV file and send by email.
+        query: "select left(creation_date, 7) as monthly, count(*) as countPerMonth from customers group by monthly"
+
+        // The email recipient addresses, one or several. 
+        to: ["youremail@example.com", "anotheremail@example.com"]
+
+        // The email sender address.
+        from: "senderemail@example.com"
+
+        // The email subject, you can use date/time format to include
+        // temporal notion in your subject.
+        subject: "customer count on %d{YYYY, MMMM}"
+
+        // The cron expression, this defines when the report will be executed.
+        cron: "* */5 * * * *"
+    }
+}
+</code></pre>
+
+<ul>
+<li>
+<code>ds</code> : This should contain the name of the datasource to use. The datasource must have been declared in the <code>datasources</code> object with the same name.</li>
+<li>
+<code>query</code> : The SQL query to use in this report. In the report, column will be sorted by alphabetical order. You can prefix column names with numbers if you want control on the columns order. For example : <code>select id as 0_id, name as 2_name, address as 1_address ...</code>. This will create three columns in the CSV file with the following order : <code>0_id, 1_address, 2_name</code>.</li>
+<li>
+<code>to</code> : A list of email addresses. They will all receive the report.</li>
+<li>
+<code>from</code> : The email address of the sender of the report. Usually this should be some kind of no-reply address such as <code>no-reply@example.com</code>.</li>
+<li>
+<code>subject</code> : The email subject. You can add date pattern inside using the syntax <code>%d{...}</code>. The pattern inside the brackets must follow <a href="http://joda-time.sourceforge.net/apidocs/org/joda/time/format/DateTimeFormat.html">Joda-Time DateTimeFormatter</a> syntax.</li>
+<li>
+<code>cron</code> : A cron expression backed by Spring Scheduler/CronTrigger. The cron expression must follow 6 fields (with seconds) cron convention. You can refer to this <a href="http://quartz-scheduler.org/documentation/quartz-1.x/tutorials/crontrigger">documentation</a> to understand cron expression. </li>
+</ul><p>Only active reports are generated by Ananas Reporter. To declare active reports, their name must be written in the configuration file. For this an array of active reports must be defined in the <code>actives</code> property :</p>
+
+<pre><code>reports {
+    actives: ["myFirstReport", "anotherReport"]
+
+    myFirstReport {
+        ...
+    }
+
+    oldAndUnusedReport {
+        ...
+    }
+
+    anotherReport {
+        ...
+    }
+</code></pre>
+
+<h2>Providing custom LogBack configuration</h2>
+
+<p>Ananas Reporter does not log much for the moment. It uses Slf4j/Logback for logging. By default there is no configuration so everything will be printed on <code>STDOUT</code>.</p>
+
+<p>You can provide your own <code>logback.xml</code> configuration file by using the system property <code>logback.configurationFile</code>. For example :</p>
+
+<pre><code>$ java -Dlogback.configurationFile=mylogback.xml -Dconfig.file=application.conf -jar ananas-reporter-all.jar
+</code></pre>
+
+<p>More information on configuring Logback can be found <a href="http://logback.qos.ch/manual/configuration.html">here</a>.</p>
+
+<h2>Providing third party jdbc driver</h2>
+
+<p>Ananas Reporter has a dependency for MySQL driver. If you need other JDBC drivers, they should be added to the classpath :</p>
+
+<ul>
+<li>Create a directory where the <code>ananas-reporter-all.jar</code> file is located, for example 'drivers'. </li>
+<li>Put required jdbc drivers jar in this directory.</li>
+<li>Run Ananas Reporter with the following command :</li>
+</ul><pre><code>$ java -Dconfig.file=application.conf -cp "ananas-reporter-all.jar;drivers/*" com.emo.ananas.app.App
+</code></pre>
+
+<p>Configure your <code>datasources</code> as described in this documentation.</p>
+
+<h2>Why such a weird name : Ananas Reporter ?</h2>
+
+<p>I've decided to call all my projects with fruits name. It's fresh and good. There is no specific reason but I had just eaten an ananas when I had the idea for this project ;-)</p>
+        </section>
+
+        <aside id="sidebar">
+          <a href="https://github.com/cedricbou/ananas-reporter/zipball/master" class="button">
+            <small>Download</small>
+            .zip file
+          </a>
+          <a href="https://github.com/cedricbou/ananas-reporter/tarball/master" class="button">
+            <small>Download</small>
+            .tar.gz file
+          </a>
+
+          <p class="repo-owner"><a href="https://github.com/cedricbou/ananas-reporter"></a> is maintained by <a href="https://github.com/cedricbou">cedricbou</a>.</p>
+
+          <p>This page was generated by <a href="pages.github.com">GitHub Pages</a> using the Architect theme by <a href="http://twitter.com/jasonlong">Jason Long</a>.</p>
+        </aside>
+      </div>
+    </div>
+
+            <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("UA-39285258-1");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
+  </body>
+</html>
