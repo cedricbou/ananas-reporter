@@ -1,0 +1,14 @@
+*.class
+
+# Package Files #
+*.jar
+*.war
+*.ear
+
+target
+.settings
+.classpath
+.project
+resin-data
+work
+bin
