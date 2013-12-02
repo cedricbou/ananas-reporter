@@ -145,7 +145,7 @@ Ananas Reporter has a dependency for MySQL driver. If you need other JDBC driver
 - Run Ananas Reporter with the following command :
 
 ```
-$ java -Dconfig.file=application.conf -cp "ananas-reporter-all.jar;drivers/*" com.emo.ananas.app.App
+$ java -Dconfig.file=application.conf -cp "ananas-reporter-all.jar:drivers/*" com.emo.ananas.app.App
 ```
 
 Configure your `datasources` as described in this documentation.
