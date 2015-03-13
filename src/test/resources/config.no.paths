@@ -1,0 +1,44 @@
+datasources {
+	ds1: {
+		url: "jdbc:mysql://localhost/base1"
+		driver: "com.mysql.jdbc.Driver"
+		user: "root"
+		password: ""
+	}
+	ds2: {
+		url: "jdbc:mysql://localhost/base2?user=root&password="
+	}
+}
+
+emailer {
+	smtp: "smtp.azerty.fr"
+}
+
+
+reports {
+	report1 {
+		datasources: ["ds1", "ds2"]
+
+		templates: ["file1.xls", "file2.xls"]
+
+		to: ["youremail@example.com", "anotheremail@example.com"]
+		from: "senderemail@example.com"
+		
+		subject: "customer count on %d{YYYY, MMMM}"
+
+		cron: "* */5 * * * *"
+	}
+
+	report2 {
+		datasources: ["ds2"]
+		
+		templates: ["file3.xls"]
+		
+		to: ["youremail@example.com", "anotheremail@example.com"]
+		from: "senderemail@example.com"
+
+		subject: "customer export on %d{YYYY-MM-dd}"
+
+		cron: "0 0 23 * * *"
+	}
+}

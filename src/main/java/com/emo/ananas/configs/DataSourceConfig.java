@@ -17,26 +17,21 @@ package com.emo.ananas.configs;
 
 import java.sql.Driver;
 
-import javax.sql.DataSource;
-
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.SimpleDriverDataSource;
-
 import com.google.common.base.Preconditions;
 import com.typesafe.config.Config;
 
 public class DataSourceConfig {
 
-	private final String url;
+	public final String url;
 	
-	private final String user;
-	private final String password;
+	public final String user;
+	public final String password;
 	
-	private final Class<Driver> driverClass;
+	public final Class<Driver> driverClass;
 	
 	@SuppressWarnings("unchecked")
-	public DataSourceConfig(final Config config) {
-		Preconditions.checkArgument(config.hasPath("url"), "expected datasources.{name}.url with valid jdbc url in config");
+	public DataSourceConfig(final Config config, final String name) {
+		ConfigUtils.raise(ConfigUtils.requireThis(config, "url", "in datasource '" + name + "'"));
 		
 		this.url = config.getString("url");
 		
@@ -62,28 +57,4 @@ public class DataSourceConfig {
 		}
 	}
 	
-	public DataSource build() {
-		if(user != null && driverClass != null) {
-			final SimpleDriverDataSource ds = new SimpleDriverDataSource();
-			ds.setUrl(url);
-			ds.setDriverClass(driverClass);
-			ds.setUsername(user);
-			ds.setPassword(password);
-			
-			return ds;
-		}
-		else if(user != null && driverClass == null) {
-			return new DriverManagerDataSource(url, user, password);
-		}
-		else if(user == null & driverClass != null) {
-			final SimpleDriverDataSource ds = new SimpleDriverDataSource();
-			ds.setUrl(url);
-			ds.setDriverClass(driverClass);
-			
-			return ds;
-		}
-		else {
-			return new DriverManagerDataSource(url);
-		}
-	}
 }

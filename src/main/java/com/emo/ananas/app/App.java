@@ -12,58 +12,74 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package com.emo.ananas.app;
 
+import java.io.File;
+import java.sql.Connection;
 import java.util.List;
 
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.support.EncodedResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
 
-import com.emo.ananas.configs.CronConfig;
-import com.emo.ananas.configs.BaseConfig;
-import com.emo.ananas.configs.EmailConfig;
-import com.emo.ananas.configs.EmailSenderConfig;
-import com.emo.ananas.configs.QueryConfig;
+import com.emo.ananas.configs.AnanasConfig;
+import com.emo.ananas.configs.ConfigUtils;
+import com.emo.ananas.configs.ReportConfig;
 import com.emo.ananas.datasources.DataSourceFactory;
+import com.emo.ananas.datasources.DataSourcesFactory;
+import com.emo.ananas.datasources.PathFactory;
+import com.emo.ananas.report.EmailReporter;
+import com.emo.ananas.report.ExcelGenerator;
 import com.emo.ananas.report.Report;
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.typesafe.config.Config;
+import com.google.common.collect.Lists;
 import com.typesafe.config.ConfigFactory;
 
 public class App {
 
 	public static void main(String[] args) throws InterruptedException {
+		Preconditions.checkArgument(args.length > 0, "expected : configuration file as argument");
+		
 		final ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+		final DataSourceFactory dsFactory = new DataSourceFactory();
 		
-		Config config = ConfigFactory.load();
+		final AnanasConfig config = new AnanasConfig(ConfigFactory.parseFile(new File(args[0])).withFallback(ConfigFactory.parseString("datasources { _demo: { url:\"jdbc:hsqldb:mem\", user: \"sa\", password: \"\", driver: \"org.hsqldb.jdbc.JDBCDriver\" } }")));
 		
-		Preconditions.checkArgument(config.hasPath("emailer"), "expected an 'emailer' object in config");
-		final Config emailerConfig = config.getConfig("emailer");
-		Preconditions.checkArgument(emailerConfig.hasPath("smtp"), "expected emailer.smtp in config");
-		
-		EmailSenderConfig emailSenderConfig = new EmailSenderConfig(emailerConfig.getString("smtp"));
-	
-		Preconditions.checkArgument(config.hasPath("reports"), "expected reports object in config");
-		final Config reportsConfig = config.getConfig("reports");
-		Preconditions.checkArgument(reportsConfig.hasPath("actives"), "expected reports.actives with array of active declared reports in config");
-		final List<String> activeReports = reportsConfig.getStringList("actives");
+		final PathFactory templateFactory = new PathFactory(config.paths.templates);
+		final DataSourcesFactory dssFactory = new DataSourcesFactory(config.datasources, dsFactory);
+				
+		scheduler.initialize();
 
-		final DataSourceFactory factory = new DataSourceFactory(config.getConfig("datasources"));
-		
-		for(final String activeReport : activeReports) {
-			Preconditions.checkArgument(reportsConfig.hasPath(activeReport), "expected reports." + activeReport + " in config, because it is declared in actives report list");
+		try(final Connection con = dsFactory.build(config.datasources.get("_demo")).getConnection()) {
+			ScriptUtils.executeSqlScript(con, new EncodedResource(new ClassPathResource("demo.sql")));
+		}
+		catch(Exception e) {
+			e.printStackTrace();
 		}
 		
-		scheduler.initialize();
-		
-		for(final String activeReport : activeReports) {
-			final Config reportConfig = reportsConfig.getConfig(activeReport);
-			final CronConfig cronConfig = new CronConfig(reportConfig);
-			final EmailConfig emailConfig = new EmailConfig(reportConfig);
-			final BaseConfig dataSource = new BaseConfig(reportConfig, factory);
-			final QueryConfig queryConfig = new QueryConfig(reportConfig, dataSource.dataSource());
-			final Report report = new Report(activeReport, scheduler, emailSenderConfig, emailConfig, cronConfig, queryConfig);
-			report.schedule();
+		for(final String reportName : config.reports.keySet()) {
+			final ReportConfig reportConfig = config.reports.get(reportName);
+			final CronTrigger trigger = new CronTrigger(reportConfig.cron);
+			
+			final List<ExcelGenerator> generators = Lists.transform(reportConfig.templates, new Function<String, ExcelGenerator>() {
+				@Override
+				public ExcelGenerator apply(String tpl) {
+					return new ExcelGenerator(dssFactory.build(reportConfig.datasources), new File(config.paths.workspace), templateFactory.build(tpl));
+				}});
+			
+			final Report report = new Report(reportName,
+				generators,
+				new EmailReporter(
+						config.emailer.smtp,
+						reportConfig.to, 
+						reportConfig.from, 
+						ConfigUtils.format(reportConfig.subject)));
+			
+			scheduler.schedule(report, trigger);
 		}
 	
 		while(true) {

@@ -15,40 +15,45 @@
 */
 package com.emo.ananas.report;
 
+import java.io.File;
+import java.util.LinkedList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-import com.emo.ananas.configs.CronConfig;
-import com.emo.ananas.configs.EmailConfig;
-import com.emo.ananas.configs.EmailSenderConfig;
-import com.emo.ananas.configs.QueryConfig;
-import com.emo.ananas.executors.QueryReportExecutor;
-import com.emo.ananas.reporters.EmailReporter;
+public class Report implements Runnable {
 
-public class Report {
-
-	private final QueryReportExecutor executor;
-	private final CronConfig cron;
-	private final ThreadPoolTaskScheduler scheduler;
-	
 	private final String reportName;
 	
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
+	private final EmailReporter reporter;
+	private final List<ExcelGenerator> generators;
 	
-	public Report(final String reportName, final ThreadPoolTaskScheduler scheduler, final EmailSenderConfig emailSender, final EmailConfig email, final CronConfig cron, final QueryConfig query) {
-		
-		final EmailReporter reporter = new EmailReporter(emailSender, email);
-		
-		this.executor = new QueryReportExecutor(reportName, query.generator(), reporter);
-		this.cron = cron;
-		this.scheduler = scheduler;
+	public Report(
+		final String reportName, 
+		final List<ExcelGenerator> generators,
+		final EmailReporter reporter) {
+
+		this.generators = generators;
+		this.reporter = reporter;
 		this.reportName = reportName;
 	}
 	
-	public void schedule() {
-		logger.info("sheduling report {} for {}", reportName, cron.trigger.getExpression());
-		scheduler.schedule(executor, cron.trigger);
+	@Override
+	public void run() {
+		logger.info("executing report {} for {}", reportName);
 		
+		final List<File> reportings = new LinkedList<File>();
+		
+		for(final ExcelGenerator gen : generators) {
+			try {
+			reportings.add(gen.generate());
+			} catch(Exception e) {
+				logger.error("Failed to generate reporting file in report {}", reportName, e);
+			}
+		}
+		
+		reporter.report(reportName, reportings);
 	}
 }

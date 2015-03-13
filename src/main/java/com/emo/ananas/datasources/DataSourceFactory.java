@@ -17,24 +17,38 @@ package com.emo.ananas.datasources;
 
 import javax.sql.DataSource;
 
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SimpleDriverDataSource;
+
 import com.emo.ananas.configs.DataSourceConfig;
-import com.google.common.base.Preconditions;
-import com.typesafe.config.Config;
 
 public class DataSourceFactory {
-
-	private final Config config;
 	
-	public DataSourceFactory(final Config config) {
-		this.config = config;
+	public DataSourceFactory() {
 	}
 	
-	public DataSource build(final String name) {
-		Preconditions.checkArgument(config.hasPath(name), "expected datasources." + name + " to be defined in config");
-		final Config config = this.config.getConfig(name);
-	
-		final DataSourceConfig dsConfig = new DataSourceConfig(config);
-	
-		return dsConfig.build();
+	public DataSource build(final DataSourceConfig config) {
+		if(config.user != null && config.driverClass != null) {
+			final SimpleDriverDataSource ds = new SimpleDriverDataSource();
+			ds.setUrl(config.url);
+			ds.setDriverClass(config.driverClass);
+			ds.setUsername(config.user);
+			ds.setPassword(config.password);
+			
+			return ds;
+		}
+		else if(config.user != null && config.driverClass == null) {
+			return new DriverManagerDataSource(config.url, config.user, config.password);
+		}
+		else if(config.user == null & config.driverClass != null) {
+			final SimpleDriverDataSource ds = new SimpleDriverDataSource();
+			ds.setUrl(config.url);
+			ds.setDriverClass(config.driverClass);
+			
+			return ds;
+		}
+		else {
+			return new DriverManagerDataSource(config.url);
+		}	
 	}
 }
